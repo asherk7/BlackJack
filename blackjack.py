@@ -1,6 +1,7 @@
 '''
 BlackJack card game that utilizes OOP
 '''
+from multiprocessing.sharedctypes import Value
 from random import shuffle, randrange
 from numpy import Infinity
 
@@ -33,6 +34,9 @@ class Deck():
         self.deck = self.shuffle_deck(self.create_deck())
 
     def create_deck(self):
+        '''
+        Using a function to create the deck with all suits and ranks
+        '''
         all_cards = []
         for suit in Deck.suits:
             for rank in Deck.ranks:
@@ -58,12 +62,13 @@ class Player():
         self.cards = []
         self.money_bet = 0
         self.money = money
-        self.record = [0, 0, 0] #wins, losses, busts
+        self.record = [0, 0, 0, 0] #wins, losses, busts, draws
 
     def hit(self, card):
         self.cards.append(card)
 
     def value(self):
+        #function to check the value of the card
         value = 0
         for i in self.cards:
             value += i.value
@@ -71,39 +76,37 @@ class Player():
 
     def __len__(self):
         return len(self.cards)
-    
+
     def __str__(self):
         return self.name
 
-#player can stand or hit
-#player wins 3:2 amount of money
-#keep track of player record, tell them if they bust or get 21
-
 def player_creation():
+    #function to create the players and their money
     player_list = []
     while True:
         try:
             players = int(input('1 Player or 2 Player? enter 1 or 2: '))
-            if players != 1 and players != 2:
+            if players not in (1, 2):
                 raise ValueError
             for i in range(1, players+1):
                 name = input(f"Enter player {i}'s name: ")
-                money = int(input(f"Enter player {i}'s money(must be 10000 or below): "))
-                if money > 10000:
+                money = int(input(f"Enter player {i}'s money(must be 10000 or below, and above 0): "))
+                if money > 10000 or money <= 0:
                     raise ValueError
                 name = Player(name, money)
                 player_list.append(name)
             break
-        except: 
+        except:
             print('Invalid answer')
     return player_list
 
 def bet(players):
-    for i in range(len(players)):
+    #function to check how much the player is betting
+    for player in players:
         while True:
             try:
-                players[i].money_bet = int(input(f'How much is {players[i]} betting this round: '))
-                if players[i].money_bet > players[i].money or players[i].money_bet < 0:
+                player.money_bet = int(input(f"{player}'s bet: "))
+                if player.money_bet > player.money or player.money_bet < 0:
                     raise ValueError
                 break
             except:
@@ -111,37 +114,118 @@ def bet(players):
 
 def hit(player, deck):
     player.hit(deck.deck.pop(randrange(0, len(deck))))
-            
-def game():
-    players = player_creation()
+
+def checkwin(player, dealer):
+    '''
+    function to check who won, and adjust their record and money
+    '''
+    if player.value() == 21:
+        if dealer.value() == 21:
+            print('Draw')
+            player.record[3] += 1
+        elif dealer.value() > 21:
+            print('Dealer busted')
+            player.record[0] += 1
+            player.money += player.money_bet*(3/2)
+        elif dealer.value() < 21:
+            print(f'{player} wins')
+            player.record[0] += 1
+            player.money += player.money_bet*(3/2)
+    if player.value() < 21:
+        if dealer.value() == 21:
+            print('Dealer wins')
+            player.record[1] += 1
+            player.money -= player.money_bet
+        elif dealer.value() > 21:
+            print('Dealer busted')
+            player.record[0] += 1
+            player.money += player.money_bet*(3/2)
+        else:
+            if (21-player.value()) > (21-dealer.value()):
+                print('Dealer wins')
+                player.record[1] += 1
+                player.money -= player.money_bet
+            elif (21-player.value()) < (21-dealer.value()):
+                print(f'{player} wins')
+                player.record[0] += 1
+                player.money += player.money_bet*(3/2)
+            else:
+                print('Draw')
+                player.record[3] += 1
+    print(f'{player} now has ${player.money}')
+    print(f"{player}'s record is now {player.record}")
+    player.money_bet = 0
+
+def play_again(players):
+    play = True
+    while play: #play again code
+        try:
+            play_again = input('Would you like to play again? Y or N: ')
+            if play_again not in ('Y', 'N'):
+                raise ValueError
+            if play_again == 'Y':
+                play = False
+                game(players)
+            elif play_again == 'N':
+                break
+        except ValueError:
+            print('Invalid input')
+
+def game(players):
+    '''
+    Function for the main game
+    '''
     dealer = Player('Dealer', Infinity)
+    for player in players:
+        player.cards = [] #resetting the cards and deck
     deck = Deck()
     bet(players)
 
-    for i in range(2):
+    for i in range(2): #dealing the cards
         hit(dealer, deck)
-        for j in range(len(players)):
-            hit(players[j], deck)
-    
-    for i in range(len(players)):
-        print('player cards: ')
-        for j in players[j].cards:
-            print(j)
-        print(f'value: {players[i].value()}')
+        for player in players:
+            hit(player, deck)
+    print("Dealer's cards: ")
+    print(f'{dealer.cards[0]} and Hidden Card')
+
+    for player in players: #showing the player's cards
+        print(f"{player}'s cards: ")
+        for card in player.cards:
+            print(card)
+        print(f'value: {player.value()}')
         while True:
-            try:
-                decision = input(f'does {players[i]} hit or stand?: ')
-                if decision == 'stand':
-                    print(f'{players[i]} is standing at {players[i].value()}')
-                elif decision == 'hit':
-                    hit(players[i], deck)
-                    print(f'new card: {players[i].cards[-1]}')
-                    print(f'{players[i]} is now at {players[i].value()}')
-                else:
+            try: #main function of the game, hitting or standing
+                decision = input(f'does {player} hit or stand?: ')
+                if decision not in ('hit', 'stand'):
                     raise ValueError
-                break
+                if decision == 'stand':
+                    print(f'{player} is standing at {player.value()}')
+                    break
+                if decision == 'hit':
+                    hit(player, deck)
+                    print(f'new card: {player.cards[-1]}')
+                    print(f'{player} is now at {player.value()}')
+                    if player.value() > 21:
+                        print('Bust')
+                        player.money -= player.money_bet
+                        player.record[1] += 1
+                        break
             except:
                 print('Invalid input')
 
+    print('Since all players have gone, the Dealer will now play')
+    while dealer.value() < 17:
+        hit(dealer, deck)
+
+    for player in players:
+        checkwin(player, dealer)
+        if player.money == 0:
+            print(f'{player} has $0, game over')
+            quit()
+
+    play_again(players)
+    quit()
+
 if __name__ == '__main__':
-    game()
+    players = player_creation()
+    game(players)
