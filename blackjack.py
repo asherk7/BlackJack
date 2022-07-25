@@ -1,7 +1,6 @@
 '''
 BlackJack card game that utilizes OOP
 '''
-from multiprocessing.sharedctypes import Value
 from random import shuffle, randrange
 from numpy import Infinity
 
